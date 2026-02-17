@@ -510,7 +510,6 @@
           div.innerHTML = svg;
         } catch (e) {
           div.textContent = source;
-          console.warn('Mermaid render error:', e);
         }
         pre.replaceWith(div);
       }

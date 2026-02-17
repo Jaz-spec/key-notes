@@ -197,7 +197,7 @@ def main():
         background_color="#0a0a0a",
         text_select=True,
     )
-    webview.start(debug=True)
+    webview.start()
 
 
 if __name__ == "__main__":
