@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>key-notes</title>
+  <script src="/static/marked.min.js"></script>
+  <script src="/static/mermaid.min.js"></script>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg:         #0a0a0a;
+      --surface:    #111111;
+      --s2:         #181818;
+      --s3:         #1e1e1e;
+      --border:     #222222;
+      --text:       #d0d0d0;
+      --text-dim:   #666666;
+      --text-muted: #3a3a3a;
+      --purple:     #8b5cf6;
+      --purple-bg:  rgba(139, 92, 246, 0.07);
+      --purple-lit: #c4b5fd;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      display: grid;
+      grid-template-columns: 210px 1fr;
+      height: 100vh;
+    }
+
+    /* ── Sidebar ── */
+
+    #sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .app-name {
+      padding: 18px 16px 14px;
+      font-size: 10.5px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    #note-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 5px 0;
+    }
+
+    #note-list::-webkit-scrollbar { width: 3px; }
+    #note-list::-webkit-scrollbar-track { background: transparent; }
+    #note-list::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 2px; }
+
+    .note-item {
+      padding: 9px 14px 9px 16px;
+      border-left: 2px solid transparent;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: background 0.1s, color 0.1s;
+      user-select: none;
+    }
+
+    .note-item:hover {
+      background: var(--s2);
+      color: var(--text);
+    }
+
+    .note-item.active {
+      border-left-color: var(--purple);
+      background: var(--purple-bg);
+      color: var(--text);
+    }
+
+    /* ── Main ── */
+
+    #main {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #toolbar {
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    #tabs {
+      display: flex;
+      gap: 2px;
+    }
+
+    .tab {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      padding: 5px 13px;
+      font-size: 12.5px;
+      border-radius: 5px;
+      transition: background 0.1s, color 0.1s;
+      font-family: inherit;
+    }
+
+    .tab:hover {
+      background: var(--s2);
+      color: var(--text);
+    }
+
+    .tab.active {
+      background: var(--s3);
+      color: var(--text);
+    }
+
+    #save-status {
+      font-size: 12px;
+      color: var(--text-muted);
+      min-width: 48px;
+      text-align: right;
+    }
+
+    #save-status.unsaved {
+      color: var(--purple);
+    }
+
+    #save-status.saved {
+      color: var(--text-dim);
+    }
+
+    /* ── Content area ── */
+
+    #content {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #editor {
+      position: absolute;
+      inset: 0;
+      background: transparent;
+      color: var(--text);
+      border: none;
+      outline: none;
+      resize: none;
+      padding: 28px 40px;
+      font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+      font-size: 13.5px;
+      line-height: 1.75;
+      caret-color: var(--purple);
+      overflow-y: auto;
+    }
+
+    #editor::-webkit-scrollbar { width: 4px; }
+    #editor::-webkit-scrollbar-track { background: transparent; }
+    #editor::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 2px; }
+    #editor::selection { background: rgba(139, 92, 246, 0.2); }
+
+    #editor::placeholder { color: var(--text-muted); }
+
+    #preview {
+      position: absolute;
+      inset: 0;
+      overflow-y: auto;
+      padding: 28px 40px;
+    }
+
+    #preview::-webkit-scrollbar { width: 4px; }
+    #preview::-webkit-scrollbar-track { background: transparent; }
+    #preview::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 2px; }
+
+    .hidden { display: none !important; }
+
+    /* ── Markdown prose ── */
+
+    #preview h1, #preview h2, #preview h3,
+    #preview h4, #preview h5, #preview h6 {
+      color: var(--text);
+      font-weight: 600;
+      margin-top: 1.6em;
+      margin-bottom: 0.5em;
+      line-height: 1.3;
+    }
+
+    #preview h1 { font-size: 1.55em; margin-top: 0; }
+    #preview h2 {
+      font-size: 1.2em;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.3em;
+    }
+    #preview h3 { font-size: 1.05em; }
+
+    #preview p {
+      margin-bottom: 0.85em;
+      line-height: 1.75;
+      color: #b8b8b8;
+    }
+
+    #preview ul, #preview ol {
+      margin-bottom: 0.85em;
+      padding-left: 1.5em;
+    }
+
+    #preview li {
+      margin-bottom: 0.3em;
+      color: #b8b8b8;
+      line-height: 1.65;
+    }
+
+    #preview li input[type="checkbox"] {
+      margin-right: 7px;
+      accent-color: var(--purple);
+      cursor: default;
+    }
+
+    #preview code {
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+      font-size: 0.87em;
+      background: var(--s3);
+      color: var(--purple-lit);
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+
+    #preview pre {
+      background: var(--s2);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 14px 18px;
+      overflow-x: auto;
+      margin-bottom: 1em;
+    }
+
+    #preview pre code {
+      background: none;
+      color: var(--purple-lit);
+      padding: 0;
+      font-size: 0.87em;
+    }
+
+    #preview blockquote {
+      border-left: 2px solid var(--purple);
+      margin: 0 0 1em;
+      padding: 4px 0 4px 18px;
+      color: var(--text-dim);
+    }
+
+    #preview a {
+      color: var(--purple);
+      text-decoration: none;
+    }
+
+    #preview a:hover { text-decoration: underline; }
+
+    #preview hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 1.5em 0;
+    }
+
+    #preview strong { color: var(--text); font-weight: 600; }
+    #preview em { color: var(--purple-lit); font-style: italic; }
+
+    #preview table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1em;
+      font-size: 0.9em;
+    }
+
+    #preview th, #preview td {
+      padding: 8px 14px;
+      border: 1px solid var(--border);
+      text-align: left;
+    }
+
+    #preview th {
+      background: var(--s2);
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    /* Mermaid diagrams */
+    #preview .mermaid {
+      background: var(--s2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 1em 0;
+      text-align: center;
+      overflow-x: auto;
+    }
+
+    #preview .mermaid svg {
+      max-width: 85%;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <aside id="sidebar">
+    <div class="app-name">key-notes</div>
+    <nav id="note-list"></nav>
+  </aside>
+
+  <main id="main">
+    <div id="toolbar">
+      <div id="tabs">
+        <button id="tab-edit" class="tab active" onclick="setMode('edit')">Edit</button>
+        <button id="tab-preview" class="tab" onclick="setMode('preview')">Preview</button>
+      </div>
+      <div id="save-status"></div>
+    </div>
+    <div id="content">
+      <textarea id="editor" spellcheck="false" placeholder="Start writing..."></textarea>
+      <div id="preview" class="hidden"></div>
+    </div>
+  </main>
+
+  <script>
+    // ── Mermaid config ────────────────────────────────────────────
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'dark',
+      darkMode: true,
+      flowchart: {
+        nodeSpacing: 25,
+        rankSpacing: 30,
+        padding: 8,
+        useMaxWidth: true,
+      },
+      themeVariables: {
+        fontSize: '12px',
+        background:        '#181818',
+        primaryColor:      '#4c1d95',
+        primaryTextColor:  '#d0d0d0',
+        primaryBorderColor:'#6d28d9',
+        lineColor:         '#7c3aed',
+        secondaryColor:    '#1e1e1e',
+        tertiaryColor:     '#222222',
+        edgeLabelBackground: '#111111',
+        clusterBkg:        '#1a1a1a',
+        titleColor:        '#d0d0d0',
+      }
+    });
+
+    // ── Marked config ─────────────────────────────────────────────
+    marked.use({
+      gfm: true,
+      breaks: false,
+      renderer: {}
+    });
+
+    // ── State ─────────────────────────────────────────────────────
+    let notes        = [];
+    let currentId    = null;
+    let savedContent = '';
+    let mode         = 'edit';
+    let statusTimer  = null;
+
+    const editor     = document.getElementById('editor');
+    const previewEl  = document.getElementById('preview');
+    const noteList   = document.getElementById('note-list');
+    const saveStatus = document.getElementById('save-status');
+    const tabEdit    = document.getElementById('tab-edit');
+    const tabPreview = document.getElementById('tab-preview');
+
+    // ── Sidebar ───────────────────────────────────────────────────
+    function renderSidebar() {
+      noteList.innerHTML = '';
+      for (const note of notes) {
+        const el = document.createElement('div');
+        el.className = 'note-item' + (note.id === currentId ? ' active' : '');
+        el.textContent = note.title;
+        el.dataset.id = note.id;
+        el.addEventListener('click', () => selectNote(note.id));
+        noteList.appendChild(el);
+      }
+    }
+
+    function updateSidebarActive() {
+      for (const el of noteList.querySelectorAll('.note-item')) {
+        el.classList.toggle('active', el.dataset.id === currentId);
+      }
+    }
+
+    function updateSidebarTitle(id, title) {
+      const note = notes.find(n => n.id === id);
+      if (note) note.title = title;
+      const el = noteList.querySelector(`[data-id="${id}"]`);
+      if (el) el.textContent = title;
+    }
+
+    // ── Note loading ──────────────────────────────────────────────
+    async function selectNote(id) {
+      if (currentId && currentId !== id && hasUnsaved()) {
+        await saveNote(true); // silent save before switching
+      }
+      currentId = id;
+      updateSidebarActive();
+      const data = await fetch(`/api/notes/${id}`).then(r => r.json());
+      editor.value = data.content;
+      savedContent = data.content;
+      clearStatus();
+      if (mode === 'preview') renderPreview();
+    }
+
+    // ── Save ──────────────────────────────────────────────────────
+    async function saveNote(silent = false) {
+      if (!currentId) return;
+      const content = editor.value;
+      await fetch(`/api/notes/${currentId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      });
+      savedContent = content;
+      updateSidebarTitle(currentId, extractTitle(content) || currentId);
+      if (!silent) showSaved();
+    }
+
+    function extractTitle(content) {
+      const match = content.match(/^#\s+(.+)/m);
+      return match ? match[1].trim() : null;
+    }
+
+    function hasUnsaved() {
+      return editor.value !== savedContent;
+    }
+
+    // ── Status indicator ──────────────────────────────────────────
+    function showSaved() {
+      if (statusTimer) clearTimeout(statusTimer);
+      saveStatus.textContent = 'Saved';
+      saveStatus.className = 'saved';
+      statusTimer = setTimeout(clearStatus, 2000);
+    }
+
+    function clearStatus() {
+      saveStatus.textContent = '';
+      saveStatus.className = '';
+    }
+
+    function markUnsaved() {
+      if (statusTimer) clearTimeout(statusTimer);
+      saveStatus.textContent = '●';
+      saveStatus.className = 'unsaved';
+    }
+
+    // ── Mode ──────────────────────────────────────────────────────
+    function setMode(m) {
+      mode = m;
+      tabEdit.classList.toggle('active', m === 'edit');
+      tabPreview.classList.toggle('active', m === 'preview');
+      if (m === 'edit') {
+        editor.classList.remove('hidden');
+        previewEl.classList.add('hidden');
+        editor.focus();
+      } else {
+        editor.classList.add('hidden');
+        previewEl.classList.remove('hidden');
+        renderPreview();
+      }
+    }
+
+    // ── Preview rendering ─────────────────────────────────────────
+    async function renderPreview() {
+      previewEl.innerHTML = marked.parse(editor.value);
+      const codeBlocks = previewEl.querySelectorAll('code.language-mermaid');
+      for (let i = 0; i < codeBlocks.length; i++) {
+        const code = codeBlocks[i];
+        const pre = code.parentElement;
+        const source = code.textContent;
+        const div = document.createElement('div');
+        div.className = 'mermaid';
+        try {
+          const { svg } = await mermaid.render(`mermaid-${Date.now()}-${i}`, source);
+          div.innerHTML = svg;
+        } catch (e) {
+          div.textContent = source;
+          console.warn('Mermaid render error:', e);
+        }
+        pre.replaceWith(div);
+      }
+    }
+
+    // ── Events ────────────────────────────────────────────────────
+    editor.addEventListener('input', () => {
+      if (hasUnsaved()) markUnsaved();
+      else clearStatus();
+    });
+
+    editor.addEventListener('keydown', e => {
+      // Tab → insert 2 spaces
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const s = editor.selectionStart;
+        const end = editor.selectionEnd;
+        editor.value = editor.value.slice(0, s) + '  ' + editor.value.slice(end);
+        editor.selectionStart = editor.selectionEnd = s + 2;
+        markUnsaved();
+      }
+    });
+
+    document.addEventListener('keydown', e => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        saveNote();
+      }
+      if ((e.metaKey || e.ctrlKey) && (e.key === '=' || e.key === '+')) {
+        e.preventDefault();
+        let z = parseFloat(document.body.style.zoom || 1);
+        document.body.style.zoom = Math.min(z + 0.1, 2);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === '-') {
+        e.preventDefault();
+        let z = parseFloat(document.body.style.zoom || 1);
+        document.body.style.zoom = Math.max(z - 0.1, 0.5);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === '0') {
+        e.preventDefault();
+        document.body.style.zoom = 1;
+      }
+    });
+
+    // ── Boot ──────────────────────────────────────────────────────
+    async function init() {
+      notes = await fetch('/api/notes').then(r => r.json());
+      renderSidebar();
+      if (notes.length > 0) {
+        await selectNote(notes[0].id);
+        editor.focus();
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
